@@ -1,5 +1,6 @@
 #pragma once
 #include <cstddef>
+#include <memory>
 #include <vector>
 #include <omp.h>
 
@@ -13,8 +14,7 @@ private:
   std::size_t rows_;
   std::size_t cols_;
 
-  // could use a uniqueptr or something but this is fine for now
-  std::vector<double> data_;
+  std::unique_ptr<double[]> data_;
 
   // just for simplication
   // CHECK later to ensure this is row major order but I think this is right
@@ -23,7 +23,7 @@ private:
   }
 
 public:
-  Grid(std::size_t rows, std::size_t cols) : rows_(rows), cols_(cols), data_(rows * cols, 0.0) {};
+  Grid(std::size_t rows, std::size_t cols) : rows_(rows), cols_(cols), data_(std::make_unique<double []>(rows * cols)) {};
 
   double& operator()(std::size_t i, std::size_t j) {
     return data_[index(i, j)];
@@ -33,11 +33,30 @@ public:
     return data_[index(i, j)];
   }
 
+  double* get_data() {
+    return data_.get();
+  }
+
+  const double* get_data() const {
+    return data_.get();
+  }
+
   // start with exposing some methods for getting rows/cols
   std::size_t get_row_count() const { return rows_; }
   std::size_t get_col_count() const { return cols_; }
 
 };  
+
+void copy_boundaries(Grid &dst, const Grid &src, std::size_t rows, std::size_t cols) {
+  std::memcpy(dst.get_data(), src.get_data(), cols * sizeof(double));
+  std::memcpy(dst.get_data() + (rows - 1) * cols, src.get_data() + (rows - 1) * cols, cols * sizeof(double));
+
+  // now cols
+  for (std::size_t i = 1; i < rows - 1; i++) {
+    dst(i, 0) = src(i,0);
+    dst(i, cols-1) = src(i, cols - 1);
+  }
+}
 
 // Apply the five-point stencil over all interior points, copying the boundary
 // values unchanged from old_grid to new_grid. Implement your solution here.
@@ -46,21 +65,7 @@ void apply_stencil(const Grid& old_grid, Grid& new_grid) {
   std::size_t rows = new_grid.get_row_count();
   std::size_t cols = new_grid.get_col_count();
 
-  for(std::size_t j = 0; j < cols; ++j) {
-    new_grid(0,j) = old_grid(0,j);
-  }
-
-  for(std::size_t j = 0; j < cols; ++j) {
-    new_grid(rows - 1,j) = old_grid(rows - 1,j);
-  }
-  
-  for(std::size_t i = 0; i < rows; ++i) {
-    new_grid(i,0) = old_grid(i,0);
-  }
-
-  for(std::size_t i = 0; i < rows; ++i) {
-    new_grid(i,cols - 1) = old_grid(i,cols - 1);
-  }
+  copy_boundaries(new_grid, old_grid, rows, cols);
 
   // collpase did not help
   #pragma omp parallel for schedule(static)
