@@ -3,6 +3,7 @@
 #include <memory>
 #include <vector>
 #include <omp.h>
+#include <cstring>
 
 // Starter Grid for the 2D heat-diffusion problem.
 //
